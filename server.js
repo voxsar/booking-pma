@@ -2,7 +2,9 @@
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const swaggerUi = require('swagger-ui-express');
 const { getDb, hydrateGuest, hydrateNotif } = require('./db');
+const { openApiSpec } = require('./swagger');
 
 const app = express();
 app.use(cors());
@@ -64,6 +66,15 @@ app.get('/api/init', (req, res) => {
 
 /* ── Health check ── */
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+
+/* ── Swagger docs ── */
+app.get('/api/docs.json', (_req, res) => res.json(openApiSpec));
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, {
+  explorer: true,
+  swaggerOptions: {
+    docExpansion: 'list',
+  },
+}));
 
 /* ── Serve frontend static files ── */
 app.use(express.static(path.join(__dirname, 'project')));
