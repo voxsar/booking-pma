@@ -14,6 +14,17 @@ const pool = mysql.createPool({
 
 async function initSchema() {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id        VARCHAR(64)  PRIMARY KEY,
+      username  VARCHAR(255) NOT NULL UNIQUE,
+      password  VARCHAR(255) NOT NULL,
+      name      VARCHAR(255) NOT NULL,
+      role      VARCHAR(32)  DEFAULT 'staff',
+      email     VARCHAR(255),
+      createdAt DATETIME     DEFAULT NOW()
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS properties (
       id    VARCHAR(64)  PRIMARY KEY,
       name  VARCHAR(255) NOT NULL,
@@ -119,6 +130,18 @@ async function seedIfEmpty() {
   const conn = await pool.getConnection();
   await conn.beginTransaction();
   try {
+    /* Seed users (password is 'password' hashed with bcrypt) */
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash('password', 10);
+    for (const u of [
+      { id: 'u_admin',  username: 'admin',  password: hashedPassword, name: 'Admin User',         role: 'admin',   email: 'admin@kavpms.com' },
+      { id: 'u_elena',  username: 'elena',  password: hashedPassword, name: 'Elena K.',           role: 'manager', email: 'elena@kavpms.com' },
+      { id: 'u_staff',  username: 'staff',  password: hashedPassword, name: 'Front Desk Staff',   role: 'staff',   email: 'staff@kavpms.com' },
+    ]) {
+      await conn.execute('INSERT INTO users (id,username,password,name,role,email) VALUES (?,?,?,?,?,?)',
+        [u.id, u.username, u.password, u.name, u.role, u.email]);
+    }
+
     for (const p of [
       { id: 'p_villa', name: 'Casa Solana Villa',      code: 'CSV', city: 'Tulum, MX',  rooms: 12, type: 'Boutique villa' },
       { id: 'p_city',  name: 'The Meridian Hotel',     code: 'TMH', city: 'Lisbon, PT', rooms: 64, type: 'City hotel'     },

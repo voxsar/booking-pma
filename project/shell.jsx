@@ -15,7 +15,7 @@ const NAV = [
   { id:'settings',     label:'Settings',       icon:'Settings'  },
 ];
 
-function Sidebar({ route, setRoute, variant='floating' }) {
+function Sidebar({ route, setRoute, variant='floating', user, onLogout }) {
   const isRail = variant === 'rail';
   return (
     <div className="sidebar">
@@ -54,11 +54,14 @@ function Sidebar({ route, setRoute, variant='floating' }) {
             );
           })}
           <div className="sb-foot">
-            <div className="avatar">EK</div>
+            <div className="avatar">{user ? helpers.initials(user.name) : 'EK'}</div>
             <div className="avatar-meta flex-1">
-              <div className="n">Elena K.</div>
-              <div className="r">Front Office Mgr</div>
+              <div className="n">{user ? user.name : 'Elena K.'}</div>
+              <div className="r">{user ? user.role : 'Front Office Mgr'}</div>
             </div>
+            <button className="tb-icon-btn" onClick={onLogout} title="Logout">
+              <Ic.Logout size={14} />
+            </button>
           </div>
         </div>
       </div>

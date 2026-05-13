@@ -26,6 +26,10 @@ function LoadingScreen() {
 function App() {
   const [ready,   setReady]   = useApp(false);
   const [error,   setError]   = useApp(null);
+  const [user,    setUser]    = useApp(() => {
+    const stored = localStorage.getItem('kavpms.user');
+    return stored ? JSON.parse(stored) : null;
+  });
   const [version, setVersion] = useApp(0);
   const [theme,   setTheme]   = useApp(() => localStorage.getItem('kavpms.theme') || 'dark');
   const [route,   setRoute]   = useApp(() => localStorage.getItem('kavpms.route') || 'dashboard');
@@ -37,18 +41,35 @@ function App() {
 
   const [t, setTweak] = (typeof useTweaks !== 'undefined') ? useTweaks(TWEAK_DEFAULTS) : [TWEAK_DEFAULTS, () => {}];
 
+  const handleLogin = useCallbackApp((loggedInUser) => {
+    setUser(loggedInUser);
+    setError(null);
+  }, []);
+
+  const handleLogout = useCallbackApp(() => {
+    localStorage.removeItem('kavpms.token');
+    localStorage.removeItem('kavpms.user');
+    setUser(null);
+    setReady(false);
+  }, []);
+
   const loadData = useCallbackApp(async () => {
+    if (!user) return;
     try {
       await window.initData();
       if (!property) setProperty(window.MOCK.properties[0]);
       setReady(true);
     } catch(e) {
       console.error('KavPMS init error:', e);
-      setError(e.message);
+      if (e.message.includes('401') || e.message.includes('Authentication')) {
+        handleLogout();
+      } else {
+        setError(e.message);
+      }
     }
-  }, []);
+  }, [user, property]);
 
-  useEffectApp(() => { loadData(); }, []);
+  useEffectApp(() => { if (user) loadData(); }, [user]);
 
   const refreshData = useCallbackApp(async () => {
     await window.initData();
@@ -74,6 +95,10 @@ function App() {
     setRoute('checkin');
   };
 
+  if (!user) {
+    return <Login onLoginSuccess={handleLogin} />;
+  }
+
   if (error) {
     return (
       <div style={{ position:'fixed', inset:0, display:'grid', placeItems:'center', background:'var(--bg-0)' }}>
@@ -97,12 +122,13 @@ function App() {
       <div className="aurora"><span /></div>
       <div className="aurora-grain" />
       <div className={`shell ${t.sidebarVariant}`}>
-        <Sidebar route={route} setRoute={setRoute} variant={t.sidebarVariant} />
+        <Sidebar route={route} setRoute={setRoute} variant={t.sidebarVariant} user={user} onLogout={handleLogout} />
         <Topbar
           theme={theme} setTheme={setTheme}
           property={currentProperty} setProperty={setProperty}
           openNotifs={() => setNotifsOpen(o => !o)}
           notifsOpen={notifsOpen}
+          user={user}
         />
         <main className="main glass" data-screen-label={route}>
           <div className="main-scroll" key={route}>
