@@ -5,6 +5,10 @@ const STATUS_FLOW    = ['dirty', 'cleaning', 'clean', 'inspected'];
 const VALID_STATUSES = ['dirty', 'cleaning', 'clean', 'inspected', 'maintenance'];
 const r = Router();
 
+function makeTaskId() {
+  return `HK-${Date.now()}`;
+}
+
 r.get('/', async (req, res, next) => {
   try {
     let sql = 'SELECT * FROM housekeepingTasks WHERE 1=1';
@@ -30,12 +34,13 @@ r.get('/:id', async (req, res, next) => {
 r.post('/', async (req, res, next) => {
   try {
     const { id, roomId, status, assignedTo, priority, due, notes } = req.body;
-    if (!id || !roomId) return res.status(400).json({ error: 'id and roomId required' });
+    if (!roomId) return res.status(400).json({ error: 'roomId required' });
+    const taskId = id || makeTaskId();
     if (status && !VALID_STATUSES.includes(status))
       return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
     await pool.execute('INSERT INTO housekeepingTasks (id,roomId,status,assignedTo,priority,due,notes) VALUES (?,?,?,?,?,?,?)',
-      [id, roomId, status ?? 'dirty', assignedTo ?? null, priority ?? 'medium', due ?? null, notes ?? null]);
-    const [[row]] = await pool.query('SELECT * FROM housekeepingTasks WHERE id = ?', [id]);
+      [taskId, roomId, status ?? 'dirty', assignedTo ?? null, priority ?? 'medium', due ?? null, notes ?? null]);
+    const [[row]] = await pool.query('SELECT * FROM housekeepingTasks WHERE id = ?', [taskId]);
     res.status(201).json(row);
   } catch (e) { next(e); }
 });

@@ -22,10 +22,10 @@ function Sidebar({ route, setRoute, variant='floating', user, onLogout }) {
       <div className="glass" style={{ height:'100%', display:'flex', flexDirection:'column' }}>
         <div className="sb">
           <div className="sb-brand">
-            <div className="sb-logo">K</div>
+            <div className="sb-logo">F</div>
             <div className="sb-brand-text">
-              <div className="sb-name">KavPMS</div>
-              <div className="sb-tag">v0.4 · Boutique</div>
+              <div className="sb-name">Fifi Resorts</div>
+              <div className="sb-tag">30200 · Villa</div>
             </div>
           </div>
           {!isRail && <div className="sb-section-label">Operate</div>}
@@ -56,8 +56,8 @@ function Sidebar({ route, setRoute, variant='floating', user, onLogout }) {
           <div className="sb-foot">
             <div className="avatar">{user ? helpers.initials(user.name) : 'EK'}</div>
             <div className="avatar-meta flex-1">
-              <div className="n">{user ? user.name : 'Elena K.'}</div>
-              <div className="r">{user ? user.role : 'Front Office Mgr'}</div>
+              <div className="n">{user ? user.name : 'Sasi Perera'}</div>
+              <div className="r">{user ? user.role : 'Villa operations'}</div>
             </div>
             <button className="tb-icon-btn" onClick={onLogout} title="Logout">
               <Ic.Logout size={14} />
@@ -69,19 +69,41 @@ function Sidebar({ route, setRoute, variant='floating', user, onLogout }) {
   );
 }
 
-function Topbar({ theme, setTheme, property, setProperty, openNotifs, notifsOpen }) {
+function Topbar({ theme, setTheme, property, setProperty, openNotifs, notifsOpen, onNewBooking, onCalendar, onAddProperty, onGlobalSearch }) {
   const [date] = useState(new Date('2026-05-09'));
+  const [search, setSearch] = useState('');
+  const searchRef = useRef(null);
+  const submitSearch = () => {
+    const q = search.trim();
+    if (q && onGlobalSearch) onGlobalSearch(q);
+  };
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
   return (
     <div className="topbar glass">
       <div className="tb">
         <div className="tb-search">
           <Ic.Search size={15} stroke="var(--fg-3)" />
-          <input placeholder="Search guests, bookings, rooms..." />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') submitSearch(); }}
+            placeholder="Search guests, bookings, rooms..."
+          />
           <span className="kbd">⌘ K</span>
         </div>
         <div className="tb-spacer" />
-        <PropertySelect property={property} setProperty={setProperty} />
-        <button className="tb-pill hide-mobile">
+        <PropertySelect property={property} setProperty={setProperty} onAddProperty={onAddProperty} />
+        <button className="tb-pill hide-mobile" onClick={onCalendar}>
           <Ic.Calendar size={14} stroke="var(--fg-2)" />
           <span className="label">Today</span>
           <span className="val">{date.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })}</span>
@@ -94,7 +116,7 @@ function Topbar({ theme, setTheme, property, setProperty, openNotifs, notifsOpen
           <Ic.Bell size={16} />
           <span className="dot" />
         </button>
-        <button className="btn btn-primary btn-sm hide-mobile">
+        <button className="btn btn-primary btn-sm hide-mobile" onClick={onNewBooking}>
           <Ic.Plus size={14} />
           <span>New booking</span>
         </button>
@@ -103,7 +125,7 @@ function Topbar({ theme, setTheme, property, setProperty, openNotifs, notifsOpen
   );
 }
 
-function PropertySelect({ property, setProperty }) {
+function PropertySelect({ property, setProperty, onAddProperty }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -134,7 +156,9 @@ function PropertySelect({ property, setProperty }) {
             </button>
           ))}
           <div className="menu-divider" />
-          <button className="menu-item"><Ic.Plus size={14} /><span>Add property</span></button>
+          <button className="menu-item" onClick={() => { setOpen(false); onAddProperty && onAddProperty(); }}>
+            <Ic.Plus size={14} /><span>Add property</span>
+          </button>
         </div>
       )}
     </div>
@@ -191,7 +215,7 @@ function NotifPanel({ onClose }) {
 function Pill({ status, label }) {
   const map = {
     available:'Available', occupied:'Occupied', dirty:'Dirty', clean:'Clean',
-    maintenance:'Maintenance', pending:'Pending', completed:'Completed',
+    maintenance:'Maintenance', pending:'Pending', partial:'Partial', completed:'Completed',
     cancelled:'Cancelled', noshow:'No-show', active:'Active', cleaning:'Cleaning',
     inspected:'Inspected', vip:'VIP'
   };

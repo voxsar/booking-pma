@@ -27,6 +27,22 @@ window.helpers = {
   rtype:   (id) => (window.MOCK.roomTypes || []).find(rt => rt.id === id),
   initials:(n)  => n.split(/\s+/).map(p => p[0]).slice(0,2).join('').toUpperCase(),
   daysBetween: (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000),
+  downloadCSV: (filename, rows) => {
+    const escape = (value) => {
+      const s = value == null ? '' : String(value);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = rows.map(row => row.map(escape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
 };
 
 /* ── API client ── */

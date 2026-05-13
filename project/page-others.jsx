@@ -90,8 +90,8 @@ function Guests() {
                 <td className="text-2 mono">{g.phone}</td>
                 <td className="num">{g.stays || 0}</td>
                 <td>{g.vip && <Pill status="vip" />}</td>
-                <td onClick={e => { e.stopPropagation(); handleDelete(g.id); }}>
-                  <button className="tb-icon-btn" style={{ width: 24, height: 24 }}><Ic.X size={12} /></button>
+                <td onClick={e => e.stopPropagation()}>
+                  <button className="tb-icon-btn" style={{ width: 24, height: 24 }} onClick={() => handleDelete(g.id)}><Ic.X size={12} /></button>
                 </td>
               </tr>
             ))}
@@ -277,9 +277,13 @@ function Housekeeping({ pushToast }) {
   };
 
   const handleAdvance = async (id) => {
-    const updated = await kavAPI.advanceTask(id);
+    const result = await kavAPI.advanceTask(id);
+    const updated = result.task || result;
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
     MOCK.housekeepingTasks = MOCK.housekeepingTasks.map(t => t.id === updated.id ? updated : t);
+    if (result.room) {
+      MOCK.rooms = MOCK.rooms.map(r => r.id === result.room.id ? result.room : r);
+    }
     pushToast('Task advanced');
   };
 
@@ -448,8 +452,12 @@ function HKTaskModal({ onSave, onClose }) {
 /* ══════════════════════════════════════════════
    CALENDAR
 ══════════════════════════════════════════════ */
-function Calendar({ property, pushToast }) {
+function Calendar({ property, pushToast, setSelectedReservation, calendarTodayRequest }) {
   const [weekOffset, setWeekOffset] = useOState(0);
+
+  useOEffect(() => {
+    if (calendarTodayRequest) setWeekOffset(0);
+  }, [calendarTodayRequest]);
 
   const rooms = (MOCK.rooms || []).filter(r => r.propertyId === property.id).slice(0, 12);
   const reservations = MOCK.reservations || [];
@@ -542,7 +550,7 @@ function Calendar({ property, pushToast }) {
                       whiteSpace: 'nowrap',
                       zIndex: 1,
                       cursor: 'pointer',
-                    }}>
+                    }} onClick={() => setSelectedReservation && setSelectedReservation(res)}>
                       {g.name.split(' ')[0]}
                     </div>
                   )}
@@ -595,6 +603,7 @@ function Reports() {
   const total = rooms.length;
   const occupied = rooms.filter(r => r.status === 'occupied').length;
   const occPct = total ? Math.round((occupied / total) * 100) : 0;
+  const maxRevenue = Math.max(...(MOCK.paymentsTimeline || []).map(p => p.value), 1);
 
   return (
     <div>
@@ -604,8 +613,22 @@ function Reports() {
           <h1>Reports</h1>
         </div>
         <div className="actions">
-          <button className="btn btn-ghost btn-sm"><Ic.Filter size={13} /><span>Export</span></button>
-          <button className="btn btn-primary btn-sm"><Ic.Bolt size={13} /><span>Full report</span></button>
+          <button className="btn btn-ghost btn-sm" onClick={() => {
+            helpers.downloadCSV(`reports-${new Date().toISOString().slice(0, 10)}.csv`, [
+              ['Metric', 'Value'],
+              ['Occupancy', `${occPct}%`],
+              ['Revenue 7 days', revenue7d],
+              ['ADR', metrics?.adr || ''],
+              ['RevPAR', metrics?.revpar || ''],
+              [],
+              ['Channel', 'Share %', 'Revenue'],
+              ...channelMix.map(ch => [ch.source, ch.pct, ch.revenue || 0]),
+              [],
+              ['Room type', 'Rooms', 'Base rate', 'Occupancy', 'Revenue'],
+              ...rtPerf.map(rt => [rt.name, rt.rooms, rt.baseRate, rt.occupancy || 0, rt.revenue || 0]),
+            ]);
+          }}><Ic.Filter size={13} /><span>Export</span></button>
+          <button className="btn btn-primary btn-sm" onClick={() => window.print()}><Ic.Bolt size={13} /><span>Full report</span></button>
         </div>
       </div>
 
@@ -623,12 +646,12 @@ function Reports() {
         </div>
         <div className="glass metric">
           <div className="top"><div className="label">ADR</div><div className="icon"><Ic.Card size={14} /></div></div>
-          <div className="v">$1,720</div>
+          <div className="v">{helpers.fmt.money(metrics?.adr || 0)}</div>
           <div className="delta"><span className="text-3">avg daily rate</span></div>
         </div>
         <div className="glass metric">
           <div className="top"><div className="label">RevPAR</div><div className="icon"><Ic.Chart size={14} /></div></div>
-          <div className="v">$1,221</div>
+          <div className="v">{helpers.fmt.money(metrics?.revpar || 0)}</div>
           <div className="delta up"><Ic.ArrowU size={11} /> On target</div>
         </div>
       </div>
@@ -642,7 +665,7 @@ function Reports() {
               <div key={i} className="col flex-1" style={{ alignItems: 'center', gap: 8 }}>
                 <div style={{
                   width: '100%',
-                  height: `${(p.value / 12000) * 100}%`,
+                  height: `${(p.value / maxRevenue) * 100}%`,
                   background: i === (MOCK.paymentsTimeline.length - 1) ? 'linear-gradient(180deg, var(--accent), var(--accent-2))' : 'var(--surface-3)',
                   borderRadius: 6,
                   minHeight: 4,
@@ -814,8 +837,8 @@ function Settings({ theme, setTheme }) {
           <div className="settings-section-title">About</div>
           <div className="glass" style={{ overflow: 'hidden' }}>
             <div className="settings-row">
-              <div className="fz-13 fw-5 text-h">KavPMS</div>
-              <div className="text-3 mono fz-11">v0.4 · Boutique Edition</div>
+              <div className="fz-13 fw-5 text-h">Fifi Resorts PMS</div>
+              <div className="text-3 mono fz-11">30200 · Villa Edition</div>
             </div>
             <div className="settings-row">
               <div className="fz-13 text-2">API endpoint</div>

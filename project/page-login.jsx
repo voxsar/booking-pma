@@ -42,9 +42,9 @@ function Login({ onLoginSuccess }) {
       <div className="aurora-grain" />
       <div className="login-box glass-strong">
         <div className="login-header">
-          <div className="sb-logo" style={{ width: 56, height: 56, fontSize: 28, margin: '0 auto 16px', borderRadius: 16 }}>K</div>
-          <h1 className="text-h fz-24 fw-5" style={{ letterSpacing: '-0.02em', marginBottom: 8 }}>Welcome to KavPMS</h1>
-          <p className="text-2 fz-13">Property Management System</p>
+          <div className="sb-logo" style={{ width: 56, height: 56, fontSize: 28, margin: '0 auto 16px', borderRadius: 16 }}>F</div>
+          <h1 className="text-h fz-24 fw-5" style={{ letterSpacing: '-0.02em', marginBottom: 8 }}>Welcome to Fifi Resorts</h1>
+          <p className="text-2 fz-13">Villa Property Management System</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">

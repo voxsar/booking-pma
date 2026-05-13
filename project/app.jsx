@@ -15,8 +15,8 @@ function LoadingScreen() {
       zIndex:100,
     }}>
       <div style={{ textAlign:'center' }}>
-        <div className="sb-logo" style={{ width:48, height:48, fontSize:24, margin:'0 auto 20px', borderRadius:14 }}>K</div>
-        <div className="text-h fz-18 fw-5" style={{ letterSpacing:'-0.02em' }}>KavPMS</div>
+        <div className="sb-logo" style={{ width:48, height:48, fontSize:24, margin:'0 auto 20px', borderRadius:14 }}>F</div>
+        <div className="text-h fz-18 fw-5" style={{ letterSpacing:'-0.02em' }}>Fifi Resorts</div>
         <div className="text-3 mono fz-10 uppercase" style={{ marginTop:8, letterSpacing:'0.14em' }}>Loading…</div>
       </div>
     </div>
@@ -36,6 +36,10 @@ function App() {
   const [property,             setProperty]             = useApp(null);
   const [selectedReservation,  setSelectedReservation]  = useApp(null);
   const [activeReservation,    setActiveReservation]    = useApp(null);
+  const [newBookingRequest,    setNewBookingRequest]    = useApp(0);
+  const [addPropertyRequest,   setAddPropertyRequest]   = useApp(0);
+  const [calendarTodayRequest, setCalendarTodayRequest] = useApp(0);
+  const [globalSearchRequest,  setGlobalSearchRequest]  = useApp(null);
   const [notifsOpen,           setNotifsOpen]           = useApp(false);
   const [toast,                setToast]                = useApp(null);
 
@@ -95,6 +99,34 @@ function App() {
     setRoute('checkin');
   };
 
+  const openNewBooking = () => {
+    setSelectedReservation(null);
+    setNotifsOpen(false);
+    setRoute('reservations');
+    setNewBookingRequest(n => n + 1);
+  };
+
+  const openAddProperty = () => {
+    setSelectedReservation(null);
+    setNotifsOpen(false);
+    setRoute('properties');
+    setAddPropertyRequest(n => n + 1);
+  };
+
+  const openCalendar = () => {
+    setSelectedReservation(null);
+    setNotifsOpen(false);
+    setRoute('calendar');
+    setCalendarTodayRequest(n => n + 1);
+  };
+
+  const runGlobalSearch = (text) => {
+    setSelectedReservation(null);
+    setNotifsOpen(false);
+    setRoute('reservations');
+    setGlobalSearchRequest({ text, tick: Date.now() });
+  };
+
   if (!user) {
     return <Login onLoginSuccess={handleLogin} />;
   }
@@ -128,18 +160,22 @@ function App() {
           property={currentProperty} setProperty={setProperty}
           openNotifs={() => setNotifsOpen(o => !o)}
           notifsOpen={notifsOpen}
+          onNewBooking={openNewBooking}
+          onCalendar={openCalendar}
+          onAddProperty={openAddProperty}
+          onGlobalSearch={runGlobalSearch}
           user={user}
         />
         <main className="main glass" data-screen-label={route}>
           <div className="main-scroll" key={route}>
             {route === 'dashboard'    && <Dashboard property={currentProperty} setRoute={setRoute} setSelectedReservation={setSelectedReservation} />}
-            {route === 'properties'   && <Properties property={currentProperty} setProperty={setProperty} setRoute={setRoute} />}
+            {route === 'properties'   && <Properties property={currentProperty} setProperty={setProperty} setRoute={setRoute} addPropertyRequest={addPropertyRequest} />}
             {route === 'rooms'        && <Rooms property={currentProperty} />}
-            {route === 'reservations' && <Reservations setSelectedReservation={setSelectedReservation} />}
+            {route === 'reservations' && <Reservations setSelectedReservation={setSelectedReservation} newBookingRequest={newBookingRequest} globalSearchRequest={globalSearchRequest} />}
             {route === 'checkin'      && <Checkin activeReservation={activeReservation} setActiveReservation={setActiveReservation} pushToast={pushToast} />}
             {route === 'guests'       && <Guests />}
             {route === 'housekeeping' && <Housekeeping pushToast={pushToast} />}
-            {route === 'calendar'     && <Calendar property={currentProperty} pushToast={pushToast} />}
+            {route === 'calendar'     && <Calendar property={currentProperty} pushToast={pushToast} setSelectedReservation={setSelectedReservation} calendarTodayRequest={calendarTodayRequest} />}
             {route === 'reports'      && <Reports />}
             {route === 'settings'     && <Settings theme={theme} setTheme={setTheme} />}
           </div>

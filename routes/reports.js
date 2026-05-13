@@ -52,7 +52,7 @@ r.get('/channel-mix', async (_req, res, next) => {
   try {
     const [rows] = await pool.query("SELECT source, COUNT(*) as count, SUM(paid) as revenue FROM reservations WHERE status IN ('active','completed','pending') GROUP BY source ORDER BY count DESC");
     const total = rows.reduce((s, r) => s + r.count, 0) || 1;
-    res.json(rows.map(r => ({ src: r.source, pct: Math.round((r.count / total) * 100), rev: Math.round(r.revenue || 0) })));
+    res.json(rows.map(r => ({ source: r.source, pct: Math.round((r.count / total) * 100), revenue: Math.round(r.revenue || 0) })));
   } catch (e) { next(e); }
 });
 
@@ -63,7 +63,7 @@ r.get('/room-type-performance', async (_req, res, next) => {
         COUNT(res.id) as sold,
         AVG(res.total / GREATEST(DATEDIFF(res.checkOut, res.checkIn), 1)) as avgRate,
         SUM(res.paid) as revenue,
-        COUNT(rm.id) as totalRooms
+        COUNT(DISTINCT rm.id) as totalRooms
       FROM roomTypes rt
       LEFT JOIN reservations res ON res.typeId = rt.id AND res.status IN ('active','completed')
       LEFT JOIN rooms rm ON rm.typeId = rt.id
@@ -72,9 +72,10 @@ r.get('/room-type-performance', async (_req, res, next) => {
     `);
     res.json(rows.map(r => ({
       ...r,
+      rooms: r.totalRooms,
       avgRate: Math.round(r.avgRate || r.baseRate),
       revenue: Math.round(r.revenue || 0),
-      occPct: r.totalRooms > 0 ? Math.min(100, Math.round((r.sold / (r.totalRooms * 30)) * 100)) : 0,
+      occupancy: r.totalRooms > 0 ? Math.min(100, Math.round((r.sold / (r.totalRooms * 30)) * 100)) : 0,
     })));
   } catch (e) { next(e); }
 });

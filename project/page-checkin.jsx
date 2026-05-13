@@ -142,6 +142,8 @@ function CIListRow({ r, onSelect }) {
 function CheckinFlow({ reservation, onDone, onCancel }) {
   const [step, setStep]           = useCIState(0);
   const [pickedRoom, setPickedRoom] = useCIState(reservation.roomId);
+  const [paymentAmount, setPaymentAmount] = useCIState('');
+  const [paymentMethod, setPaymentMethod] = useCIState('Card');
   const [saving, setSaving]       = useCIState(false);
 
   const g    = helpers.guest(reservation.guestId);
@@ -152,6 +154,14 @@ function CheckinFlow({ reservation, onDone, onCancel }) {
   const handleCheckin = async () => {
     setSaving(true);
     try {
+      const amount = parseFloat(paymentAmount) || 0;
+      if (amount > 0) {
+        const balance = reservation.total - reservation.paid;
+        await kavAPI.updatePayment(reservation.id, {
+          amountPaid: amount,
+          paymentStatus: amount >= balance ? 'completed' : 'partial',
+        });
+      }
       await kavAPI.checkinReservation(reservation.id, pickedRoom !== reservation.roomId ? pickedRoom : undefined);
       if (window.kavRefresh) await window.kavRefresh();
       onDone();
@@ -182,7 +192,15 @@ function CheckinFlow({ reservation, onDone, onCancel }) {
         {step === 1 && <StepRoom picked={pickedRoom} setPicked={setPickedRoom} reservation={reservation} />}
         {step === 2 && <StepDocuments g={g} />}
         {step === 3 && <StepPreferences g={g} />}
-        {step === 4 && <StepPayment reservation={reservation} />}
+        {step === 4 && (
+          <StepPayment
+            reservation={reservation}
+            amount={paymentAmount}
+            setAmount={setPaymentAmount}
+            method={paymentMethod}
+            setMethod={setPaymentMethod}
+          />
+        )}
         {step === 5 && <StepConfirm reservation={reservation} g={g} room={room} pickedRoom={pickedRoom} />}
 
         <div className="row" style={{ marginTop: 18, gap: 10 }}>
@@ -320,7 +338,7 @@ function StepPreferences({ g }) {
   );
 }
 
-function StepPayment({ reservation }) {
+function StepPayment({ reservation, amount, setAmount, method, setMethod }) {
   const balance = reservation.total - reservation.paid;
   return (
     <div className="glass step-card">
@@ -333,11 +351,22 @@ function StepPayment({ reservation }) {
         <div style={{ marginTop: 16 }}>
           <div className="form-group">
             <label>Collect deposit / payment</label>
-            <input type="number" placeholder={`$${balance.toFixed(2)} due`} />
+            <input
+              type="number"
+              placeholder={`$${balance.toFixed(2)} due`}
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+            />
           </div>
           <div className="row gap-2">
             {['Card', 'Cash', 'Bank transfer'].map(m => (
-              <button key={m} className="btn btn-ghost btn-sm">{m}</button>
+              <button
+                key={m}
+                className={`btn btn-sm ${method === m ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setMethod(m)}
+              >
+                {m}
+              </button>
             ))}
           </div>
         </div>
@@ -381,6 +410,8 @@ function StepConfirm({ reservation, g, room, pickedRoom }) {
 /* ── Check-out flow ── */
 function CheckoutFlow({ reservation, onDone, onCancel }) {
   const [amountPaid, setAmountPaid] = useCIState('');
+  const [paymentMethod, setPaymentMethod] = useCIState('Card');
+  const [checks, setChecks] = useCIState([]);
   const [saving, setSaving]         = useCIState(false);
   const g    = helpers.guest(reservation.guestId);
   const room = helpers.room(reservation.roomId);
@@ -398,6 +429,10 @@ function CheckoutFlow({ reservation, onDone, onCancel }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleCheck = (name) => {
+    setChecks(prev => prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name]);
   };
 
   return (
@@ -431,7 +466,13 @@ function CheckoutFlow({ reservation, onDone, onCancel }) {
               </div>
               <div className="row gap-2">
                 {['Card', 'Cash', 'Bank transfer'].map(m => (
-                  <button key={m} className="btn btn-ghost btn-sm">{m}</button>
+                  <button
+                    key={m}
+                    className={`btn btn-sm ${paymentMethod === m ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setPaymentMethod(m)}
+                  >
+                    {m}
+                  </button>
                 ))}
               </div>
             </div>
@@ -442,7 +483,13 @@ function CheckoutFlow({ reservation, onDone, onCancel }) {
           <div className="fz-14 fw-5 text-h" style={{ marginBottom: 12 }}>Room inspection</div>
           <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
             {['No damage', 'Mini-bar checked', 'Keys returned', 'Safe cleared'].map(c => (
-              <button key={c} className="btn btn-ghost btn-sm">{c}</button>
+              <button
+                key={c}
+                className={`btn btn-sm ${checks.includes(c) ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => toggleCheck(c)}
+              >
+                {c}
+              </button>
             ))}
           </div>
           <div className="form-group" style={{ marginTop: 12 }}>

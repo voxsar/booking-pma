@@ -2,7 +2,7 @@
 /* eslint-disable */
 const { useState: useResState, useEffect: useResEffect, useRef: useResRef } = React;
 
-function Reservations({ setSelectedReservation }) {
+function Reservations({ setSelectedReservation, newBookingRequest, globalSearchRequest }) {
   const [reservations, setReservations] = useResState(MOCK.reservations || []);
   const [search, setSearch]             = useResState('');
   const [statusFilter, setStatusFilter] = useResState('all');
@@ -26,6 +26,14 @@ function Reservations({ setSelectedReservation }) {
     await refresh();
     setAddOpen(false);
   };
+
+  useResEffect(() => {
+    if (newBookingRequest) setAddOpen(true);
+  }, [newBookingRequest]);
+
+  useResEffect(() => {
+    if (globalSearchRequest?.tick) setSearch(globalSearchRequest.text || '');
+  }, [globalSearchRequest?.tick]);
 
   const STATUSES = ['all', 'pending', 'active', 'completed', 'cancelled', 'noshow'];
 
@@ -54,6 +62,30 @@ function Reservations({ setSelectedReservation }) {
     counts[s] = s === 'all' ? reservations.length : reservations.filter(r => r.status === s).length;
   });
 
+  const exportReservations = () => {
+    const rows = [
+      ['Booking', 'Guest', 'Room', 'Check-in', 'Check-out', 'Nights', 'Source', 'Payment', 'Status', 'Total', 'Paid'],
+      ...filtered.map(r => {
+        const g = helpers.guest(r.guestId);
+        const room = helpers.room(r.roomId);
+        return [
+          r.id,
+          g?.name || '',
+          room?.number || '',
+          r.checkIn,
+          r.checkOut,
+          helpers.daysBetween(r.checkIn, r.checkOut),
+          r.source,
+          r.paymentStatus,
+          r.status,
+          r.total,
+          r.paid,
+        ];
+      }),
+    ];
+    helpers.downloadCSV(`reservations-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
+
   return (
     <div>
       <div className="page-head">
@@ -63,7 +95,7 @@ function Reservations({ setSelectedReservation }) {
           <p>{reservations.length} total · {counts.active} active · {counts.pending} pending</p>
         </div>
         <div className="actions">
-          <button className="btn btn-ghost btn-sm">
+          <button className="btn btn-ghost btn-sm" onClick={exportReservations}>
             <Ic.Filter size={13} /><span>Export</span>
           </button>
           <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(true)}>
@@ -146,8 +178,8 @@ function Reservations({ setSelectedReservation }) {
                   <td><Pill status={r.paymentStatus} /></td>
                   <td><Pill status={r.status} /></td>
                   <td className="num strong" style={{ textAlign: 'right' }}>{helpers.fmt.money(r.total)}</td>
-                  <td onClick={e => { e.stopPropagation(); handleDelete(r.id); }}>
-                    <button className="tb-icon-btn" style={{ width: 24, height: 24 }}>
+                  <td onClick={e => e.stopPropagation()}>
+                    <button className="tb-icon-btn" style={{ width: 24, height: 24 }} onClick={() => handleDelete(r.id)}>
                       <Ic.X size={12} />
                     </button>
                   </td>
@@ -172,9 +204,10 @@ function AddReservationModal({ onSave, onClose }) {
   const guests = MOCK.guests || [];
   const rooms  = MOCK.rooms  || [];
   const types  = MOCK.roomTypes || [];
+  const availableRooms = rooms.filter(r => r.status === 'available');
   const [form, setForm] = useResState({
     guestId: guests[0]?.id || '',
-    roomId: rooms[0]?.id || '',
+    roomId: availableRooms[0]?.id || rooms[0]?.id || '',
     typeId: types[0]?.id || '',
     checkIn:  helpers.d(1),
     checkOut: helpers.d(3),
@@ -185,6 +218,8 @@ function AddReservationModal({ onSave, onClose }) {
     paid: 0,
     notes: '',
   });
+  const [saving, setSaving] = useResState(false);
+  const [error, setError] = useResState('');
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const nights = helpers.daysBetween(form.checkIn, form.checkOut);
@@ -193,11 +228,19 @@ function AddReservationModal({ onSave, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await onSave({
-      ...form,
-      typeId: selectedRoom?.typeId || form.typeId,
-      total: form.total || (rtype?.baseRate || 0) * nights,
-    });
+    setSaving(true);
+    setError('');
+    try {
+      await onSave({
+        ...form,
+        typeId: selectedRoom?.typeId || form.typeId,
+        total: form.total || (rtype?.baseRate || 0) * nights,
+      });
+    } catch (e) {
+      setError(e.message || 'Could not create booking');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -216,10 +259,13 @@ function AddReservationModal({ onSave, onClose }) {
           <div className="form-group">
             <label>Room</label>
             <select value={form.roomId} onChange={e => set('roomId', e.target.value)}>
-              {rooms.filter(r => r.status === 'available').map(r => (
+              {availableRooms.map(r => (
                 <option key={r.id} value={r.id}>RM {r.number} · {helpers.rtype(r.typeId)?.name}</option>
               ))}
             </select>
+            {availableRooms.length === 0 && (
+              <div className="text-3 fz-12" style={{ marginTop: 6 }}>No available rooms right now.</div>
+            )}
           </div>
           <div className="form-row">
             <div className="form-group">
@@ -247,10 +293,13 @@ function AddReservationModal({ onSave, onClose }) {
             <label>Notes</label>
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} style={{ minHeight: 60 }} />
           </div>
+          {error && <div className="text-3 fz-12" style={{ color: 'var(--st-maintenance)' }}>{error}</div>}
         </div>
         <div style={{ padding: '12px 22px', borderTop: '1px solid var(--hairline)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn btn-primary btn-sm">Create booking</button>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={saving || !form.guestId || !form.roomId || !form.checkIn || !form.checkOut}>
+            {saving ? 'Creating...' : 'Create booking'}
+          </button>
         </div>
       </form>
     </Modal>
@@ -358,7 +407,7 @@ function RChargesTab({ r, onPayment }) {
   const handleCollect = async () => {
     const n = parseFloat(amount);
     if (!n || n <= 0) return;
-    await onPayment({ amountPaid: n, paymentStatus: n >= balance ? 'paid' : 'partial' });
+    await onPayment({ amountPaid: n, paymentStatus: n >= balance ? 'completed' : 'partial' });
     setAmount('');
   };
 

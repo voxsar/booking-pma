@@ -3,7 +3,7 @@
 const { useState: useRoomState, useEffect: useRoomEffect } = React;
 
 /* ── Properties page ── */
-function Properties({ property, setProperty, setRoute }) {
+function Properties({ property, setProperty, setRoute, addPropertyRequest }) {
   const [props, setProps]   = useRoomState(MOCK.properties || []);
   const [editing, setEdit]  = useRoomState(null);
   const [adding, setAdding] = useRoomState(false);
@@ -30,6 +30,10 @@ function Properties({ property, setProperty, setRoute }) {
     setEdit(null);
     setAdding(false);
   };
+
+  useRoomEffect(() => {
+    if (addPropertyRequest) setAdding(true);
+  }, [addPropertyRequest]);
 
   return (
     <div>

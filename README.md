@@ -1,6 +1,6 @@
-# KavPMS — Property Management System
+# Fifi Resorts PMS - Property Management System
 
-A modern, full-featured Property Management System (PMS) for hotels, resorts, and vacation rentals. Built with Node.js, Express, React, and MariaDB/MySQL.
+A modern, full-featured Property Management System (PMS) configured with representative data for Fifi Resorts (Pvt) Ltd, property code 30200. Built with Node.js, Express, React, and MariaDB/MySQL.
 
 ## Features
 
@@ -144,12 +144,12 @@ The application auto-creates tables on first run:
 
 On first run, the database is automatically seeded with:
 - 3 demo users (admin, elena, staff)
-- 3 sample properties
-- 5 room types
-- 24 rooms across 4 floors
-- 8 sample guests
-- 11 reservations
-- 8 housekeeping tasks
+- Fifi Resorts (Pvt) Ltd, property code 30200
+- 5 villa room types: Mount Monarch, Mount Luxe, Sunrise Vista, Eco Harmony, and Forest Escape
+- 5 villa suites/chalets matching the Fifi Resorts room naming pattern
+- 8 representative guests
+- 10 reservations across direct, web, affiliate, phone, and OTA channels
+- 5 housekeeping tasks
 - 5 notifications
 
 ## Architecture

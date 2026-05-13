@@ -13,19 +13,25 @@ function Dashboard({ property, setRoute, setSelectedReservation }) {
   const active      = MOCK.reservations.filter(r => r.status === 'active');
   const pending     = MOCK.reservations.filter(r => r.paymentStatus === 'pending');
   const revenue7d   = MOCK.paymentsTimeline.reduce((s, p) => s + p.value, 0);
+  const todayRevenue = MOCK.paymentsTimeline[MOCK.paymentsTimeline.length - 1]?.value || 0;
+  const maxRevenue  = Math.max(...MOCK.paymentsTimeline.map(p => p.value), 1);
+  const adr         = MOCK.roomTypes.length
+    ? Math.round(MOCK.roomTypes.reduce((s, rt) => s + Number(rt.baseRate || 0), 0) / MOCK.roomTypes.length)
+    : 0;
   const occPct      = total ? Math.round((occupied / total) * 100) : 0;
+  const peakOcc     = Math.max(...(MOCK.occupancyHistory || [occPct]));
 
   return (
     <div>
       <div className="page-head">
         <div>
           <div className="eyebrow">Front Office · {property.name}</div>
-          <h1>Good morning, Elena <span className="accent-italic">— here's today.</span></h1>
-          <p>Friday, May 9. Light arrivals through the morning, full house by 4pm. Two rooms blocked for maintenance on the third floor.</p>
+          <h1>Good morning, Sasi <span className="accent-italic">— here's today.</span></h1>
+          <p>Friday, May 9. Five villa suites in focus, with direct arrivals, a pending checkout, and housekeeping turns before afternoon check-in.</p>
         </div>
         <div className="actions">
-          <button className="btn btn-ghost btn-sm"><Ic.Filter size={13} /><span>Filters</span></button>
-          <button className="btn btn-primary btn-sm"><Ic.Bolt size={13} /><span>Daily report</span></button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setRoute('reports')}><Ic.Filter size={13} /><span>Filters</span></button>
+          <button className="btn btn-primary btn-sm" onClick={() => setRoute('reports')}><Ic.Bolt size={13} /><span>Daily report</span></button>
         </div>
       </div>
 
@@ -45,7 +51,7 @@ function Dashboard({ property, setRoute, setSelectedReservation }) {
           <div style={{ marginTop:'auto' }}>
             <div className="row between" style={{ marginBottom:8 }}>
               <div className="text-3 mono fz-10">14-DAY TREND</div>
-              <div className="text-3 mono fz-10">PEAK 93%</div>
+              <div className="text-3 mono fz-10">PEAK {peakOcc}%</div>
             </div>
             <Sparkline data={MOCK.occupancyHistory} w={400} h={48} />
           </div>
@@ -55,8 +61,8 @@ function Dashboard({ property, setRoute, setSelectedReservation }) {
             <div className="label">Today's revenue</div>
             <div className="icon"><Ic.Coin size={14} /></div>
           </div>
-          <div className="v">$11.2<span className="unit">K</span></div>
-          <div className="delta up"><Ic.ArrowU size={11} /> 18.4% wow</div>
+          <div className="v">{helpers.fmt.money(todayRevenue)}</div>
+          <div className="delta up"><Ic.ArrowU size={11} /> Web20 and direct offers pacing well</div>
         </div>
         <div className="glass metric">
           <div className="top">
@@ -132,7 +138,7 @@ function Dashboard({ property, setRoute, setSelectedReservation }) {
             })}
             {departures.length === 0 && <div className="text-3 fz-12">No departures scheduled.</div>}
           </div>
-          <button className="btn btn-quiet btn-sm" style={{ marginTop:8, padding:0 }}>Process check-outs <Ic.ArrowR size={12} /></button>
+          <button className="btn btn-quiet btn-sm" style={{ marginTop:8, padding:0 }} onClick={() => setRoute('checkin')}>Process check-outs <Ic.ArrowR size={12} /></button>
         </div>
 
         <div className="glass" style={{ padding:18 }}>
@@ -214,7 +220,7 @@ function Dashboard({ property, setRoute, setSelectedReservation }) {
             <div>
               <div className="text-3 mono fz-10 uppercase">Revenue · 7 days</div>
               <div className="fz-28 fw-5 text-h" style={{ marginTop:6, letterSpacing:'-0.02em' }}>{helpers.fmt.money(revenue7d)}</div>
-              <div className="text-3 fz-12" style={{ marginTop:2 }}>$1,720 ADR · 71% occ avg</div>
+              <div className="text-3 fz-12" style={{ marginTop:2 }}>{helpers.fmt.money(adr)} ADR · villa-suite mix</div>
             </div>
             <Pill status="completed" label="On target" />
           </div>
@@ -222,7 +228,7 @@ function Dashboard({ property, setRoute, setSelectedReservation }) {
             {MOCK.paymentsTimeline.map((p, i) => (
               <div key={i} className="col flex-1" style={{ alignItems:'center', gap:8 }}>
                 <div style={{
-                  width:'100%', height: `${(p.value / 12000) * 100}%`,
+                  width:'100%', height: `${(p.value / maxRevenue) * 100}%`,
                   background: i === MOCK.paymentsTimeline.length - 1 ? 'linear-gradient(180deg, var(--accent), var(--accent-2))' : 'var(--surface-3)',
                   borderRadius:6, transition:'all 240ms', boxShadow: i === MOCK.paymentsTimeline.length - 1 ? '0 8px 20px -8px var(--accent-glow)' : 'none'
                 }} />

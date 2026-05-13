@@ -4,6 +4,12 @@ const { pool }   = require('../db');
 const VALID_STATUSES = ['pending', 'active', 'completed', 'cancelled', 'noshow'];
 const r = Router();
 
+function makeReservationId() {
+  const stamp = Date.now().toString(36).toUpperCase();
+  const salt = Math.floor(Math.random() * 1296).toString(36).padStart(2, '0').toUpperCase();
+  return `BK-${stamp}${salt}`;
+}
+
 r.get('/', async (req, res, next) => {
   try {
     let sql = 'SELECT * FROM reservations WHERE 1=1';
@@ -31,14 +37,15 @@ r.get('/:id', async (req, res, next) => {
 r.post('/', async (req, res, next) => {
   try {
     const { id, guestId, roomId, typeId, checkIn, checkOut, source, paymentStatus, status, total, paid, adults, children } = req.body;
-    if (!id || !guestId || !roomId || !checkIn || !checkOut)
-      return res.status(400).json({ error: 'id, guestId, roomId, checkIn, checkOut required' });
+    if (!guestId || !roomId || !checkIn || !checkOut)
+      return res.status(400).json({ error: 'guestId, roomId, checkIn, checkOut required' });
     if (status && !VALID_STATUSES.includes(status))
       return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+    const reservationId = id || makeReservationId();
     await pool.execute('INSERT INTO reservations (id,guestId,roomId,typeId,checkIn,checkOut,source,paymentStatus,status,total,paid,adults,children) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [id, guestId, roomId, typeId ?? null, checkIn, checkOut, source ?? 'Direct',
+      [reservationId, guestId, roomId, typeId ?? null, checkIn, checkOut, source ?? 'Direct',
        paymentStatus ?? 'pending', status ?? 'pending', total ?? 0, paid ?? 0, adults ?? 2, children ?? 0]);
-    const [[row]] = await pool.query('SELECT * FROM reservations WHERE id = ?', [id]);
+    const [[row]] = await pool.query('SELECT * FROM reservations WHERE id = ?', [reservationId]);
     res.status(201).json(row);
   } catch (e) { next(e); }
 });
@@ -88,12 +95,15 @@ r.post('/:id/checkout', async (req, res, next) => {
     if (!existing) return res.status(404).json({ error: 'Not found' });
     if (existing.status !== 'active')
       return res.status(409).json({ error: `Cannot check out a reservation with status "${existing.status}"` });
-    const amountPaid = req.body.amountPaid ?? existing.total;
+    const balance = Math.max(Number(existing.total) - Number(existing.paid || 0), 0);
+    const amountPaid = req.body.amountPaid != null ? Number(req.body.amountPaid) : balance;
+    const nextPaid = Math.min(Number(existing.total), Number(existing.paid || 0) + Math.max(amountPaid, 0));
+    const paymentStatus = nextPaid >= Number(existing.total) ? 'completed' : nextPaid > 0 ? 'partial' : 'pending';
     const conn = await pool.getConnection();
     await conn.beginTransaction();
     try {
       await conn.execute('UPDATE reservations SET status=?,paymentStatus=?,paid=? WHERE id=?',
-        ['completed', 'completed', amountPaid, req.params.id]);
+        ['completed', paymentStatus, nextPaid, req.params.id]);
       await conn.execute('UPDATE rooms SET status=? WHERE id=?', ['dirty', existing.roomId]);
       await conn.execute('INSERT IGNORE INTO housekeepingTasks (id,roomId,status,priority,due) VALUES (?,?,?,?,?)',
         [`HK-${Date.now()}`, existing.roomId, 'dirty', 'medium', '14:00']);
@@ -109,9 +119,17 @@ r.patch('/:id/payment', async (req, res, next) => {
   try {
     const [[existing]] = await pool.query('SELECT * FROM reservations WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Not found' });
-    const { paid, paymentStatus } = req.body;
+    const { amountPaid, paid, paymentStatus } = req.body;
+    const total = Number(existing.total || 0);
+    const currentPaid = Number(existing.paid || 0);
+    const nextPaid = amountPaid != null
+      ? Math.min(total, currentPaid + Math.max(Number(amountPaid) || 0, 0))
+      : paid != null
+        ? Math.min(total, Math.max(Number(paid) || 0, 0))
+        : currentPaid;
+    const nextPaymentStatus = paymentStatus ?? (nextPaid >= total ? 'completed' : nextPaid > 0 ? 'partial' : 'pending');
     await pool.execute('UPDATE reservations SET paid=?,paymentStatus=? WHERE id=?',
-      [paid ?? existing.paid, paymentStatus ?? existing.paymentStatus, req.params.id]);
+      [nextPaid, nextPaymentStatus, req.params.id]);
     const [[row]] = await pool.query('SELECT * FROM reservations WHERE id = ?', [req.params.id]);
     res.json(row);
   } catch (e) { next(e); }
