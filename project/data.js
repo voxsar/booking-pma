@@ -32,7 +32,12 @@ window.helpers = {
 /* ── API client ── */
 const BASE = '';  /* same origin */
 async function apiFetch(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  const token = localStorage.getItem('kavpms.token');
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const opts = { method, headers };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res = await fetch(BASE + path, opts);
   if (!res.ok) {

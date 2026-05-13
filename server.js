@@ -5,23 +5,27 @@ const path      = require('path');
 const swaggerUi = require('swagger-ui-express');
 const { pool, initDb, hydrateGuest, hydrateNotif } = require('./db');
 const { openApiSpec } = require('./swagger');
+const authMiddleware = require('./middleware/auth');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ── API routes ── */
-app.use('/api/properties',   require('./routes/properties'));
-app.use('/api/room-types',   require('./routes/roomTypes'));
-app.use('/api/rooms',        require('./routes/rooms'));
-app.use('/api/guests',       require('./routes/guests'));
-app.use('/api/reservations', require('./routes/reservations'));
-app.use('/api/housekeeping', require('./routes/housekeeping'));
-app.use('/api/notifications',require('./routes/notifications'));
-app.use('/api/reports',      require('./routes/reports'));
+/* ── Auth routes (public) ── */
+app.use('/api/auth', require('./routes/auth'));
+
+/* ── API routes (protected) ── */
+app.use('/api/properties',   authMiddleware, require('./routes/properties'));
+app.use('/api/room-types',   authMiddleware, require('./routes/roomTypes'));
+app.use('/api/rooms',        authMiddleware, require('./routes/rooms'));
+app.use('/api/guests',       authMiddleware, require('./routes/guests'));
+app.use('/api/reservations', authMiddleware, require('./routes/reservations'));
+app.use('/api/housekeeping', authMiddleware, require('./routes/housekeeping'));
+app.use('/api/notifications',authMiddleware, require('./routes/notifications'));
+app.use('/api/reports',      authMiddleware, require('./routes/reports'));
 
 /* ── GET /api/init — single call to bootstrap the frontend ── */
-app.get('/api/init', async (_req, res, next) => {
+app.get('/api/init', authMiddleware, async (_req, res, next) => {
   try {
     const [properties]        = await pool.query('SELECT * FROM properties ORDER BY name');
     const [roomTypes]         = await pool.query('SELECT * FROM roomTypes ORDER BY baseRate');
