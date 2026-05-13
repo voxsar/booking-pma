@@ -1,96 +1,104 @@
 'use strict';
 const { Router } = require('express');
-const { getDb }  = require('../db');
+const { pool }   = require('../db');
 const STATUS_FLOW    = ['dirty', 'cleaning', 'clean', 'inspected'];
 const VALID_STATUSES = ['dirty', 'cleaning', 'clean', 'inspected', 'maintenance'];
 const r = Router();
 
-r.get('/', (req, res) => {
-  let sql    = 'SELECT * FROM housekeepingTasks WHERE 1=1';
-  const args = [];
-  if (req.query.status)     { sql += ' AND status = ?';      args.push(req.query.status);      }
-  if (req.query.roomId)     { sql += ' AND roomId = ?';      args.push(req.query.roomId);      }
-  if (req.query.priority)   { sql += ' AND priority = ?';    args.push(req.query.priority);    }
-  if (req.query.assignedTo) { sql += ' AND assignedTo = ?';  args.push(req.query.assignedTo);  }
-  sql += ' ORDER BY due';
-  res.json(getDb().prepare(sql).all(...args));
+r.get('/', async (req, res, next) => {
+  try {
+    let sql = 'SELECT * FROM housekeepingTasks WHERE 1=1';
+    const args = [];
+    if (req.query.status)     { sql += ' AND status = ?';     args.push(req.query.status);     }
+    if (req.query.roomId)     { sql += ' AND roomId = ?';     args.push(req.query.roomId);     }
+    if (req.query.priority)   { sql += ' AND priority = ?';   args.push(req.query.priority);   }
+    if (req.query.assignedTo) { sql += ' AND assignedTo = ?'; args.push(req.query.assignedTo); }
+    sql += ' ORDER BY due';
+    const [rows] = await pool.query(sql, args);
+    res.json(rows);
+  } catch (e) { next(e); }
 });
 
-r.get('/:id', (req, res) => {
-  const row = getDb().prepare('SELECT * FROM housekeepingTasks WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
-  res.json(row);
+r.get('/:id', async (req, res, next) => {
+  try {
+    const [[row]] = await pool.query('SELECT * FROM housekeepingTasks WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    res.json(row);
+  } catch (e) { next(e); }
 });
 
-r.post('/', (req, res) => {
-  const { id, roomId, status, assignedTo, priority, due, notes } = req.body;
-  if (!id || !roomId) return res.status(400).json({ error: 'id and roomId required' });
-  if (status && !VALID_STATUSES.includes(status))
-    return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
-  getDb().prepare(
-    'INSERT INTO housekeepingTasks (id, roomId, status, assignedTo, priority, due, notes) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, roomId, status ?? 'dirty', assignedTo ?? null, priority ?? 'medium', due ?? null, notes ?? null);
-  res.status(201).json(getDb().prepare('SELECT * FROM housekeepingTasks WHERE id = ?').get(id));
+r.post('/', async (req, res, next) => {
+  try {
+    const { id, roomId, status, assignedTo, priority, due, notes } = req.body;
+    if (!id || !roomId) return res.status(400).json({ error: 'id and roomId required' });
+    if (status && !VALID_STATUSES.includes(status))
+      return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+    await pool.execute('INSERT INTO housekeepingTasks (id,roomId,status,assignedTo,priority,due,notes) VALUES (?,?,?,?,?,?,?)',
+      [id, roomId, status ?? 'dirty', assignedTo ?? null, priority ?? 'medium', due ?? null, notes ?? null]);
+    const [[row]] = await pool.query('SELECT * FROM housekeepingTasks WHERE id = ?', [id]);
+    res.status(201).json(row);
+  } catch (e) { next(e); }
 });
 
-r.put('/:id', (req, res) => {
-  const db  = getDb();
-  const row = db.prepare('SELECT * FROM housekeepingTasks WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
-  const { roomId, status, assignedTo, priority, due, notes } = req.body;
-  if (status && !VALID_STATUSES.includes(status))
-    return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
-  db.prepare(
-    'UPDATE housekeepingTasks SET roomId=?, status=?, assignedTo=?, priority=?, due=?, notes=? WHERE id=?'
-  ).run(
-    roomId     ?? row.roomId,
-    status     ?? row.status,
-    assignedTo !== undefined ? assignedTo : row.assignedTo,
-    priority   ?? row.priority,
-    due        ?? row.due,
-    notes      !== undefined ? notes : row.notes,
-    req.params.id
-  );
-  res.json(db.prepare('SELECT * FROM housekeepingTasks WHERE id = ?').get(req.params.id));
+r.put('/:id', async (req, res, next) => {
+  try {
+    const [[existing]] = await pool.query('SELECT * FROM housekeepingTasks WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    const { roomId, status, assignedTo, priority, due, notes } = req.body;
+    if (status && !VALID_STATUSES.includes(status))
+      return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+    await pool.execute('UPDATE housekeepingTasks SET roomId=?,status=?,assignedTo=?,priority=?,due=?,notes=? WHERE id=?',
+      [roomId ?? existing.roomId, status ?? existing.status,
+       assignedTo !== undefined ? assignedTo : existing.assignedTo,
+       priority ?? existing.priority, due ?? existing.due,
+       notes !== undefined ? notes : existing.notes, req.params.id]);
+    const [[row]] = await pool.query('SELECT * FROM housekeepingTasks WHERE id = ?', [req.params.id]);
+    res.json(row);
+  } catch (e) { next(e); }
 });
 
-/* POST /housekeeping/:id/advance — move to next status in flow */
-r.post('/:id/advance', (req, res) => {
-  const db  = getDb();
-  const row = db.prepare('SELECT * FROM housekeepingTasks WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
-  const idx  = STATUS_FLOW.indexOf(row.status);
-  if (idx === -1 || idx === STATUS_FLOW.length - 1)
-    return res.status(409).json({ error: `Task in "${row.status}" cannot be advanced` });
-  const next = STATUS_FLOW[idx + 1];
-  db.transaction(() => {
-    db.prepare('UPDATE housekeepingTasks SET status=? WHERE id=?').run(next, req.params.id);
-    if (next === 'clean' || next === 'inspected') {
-      db.prepare('UPDATE rooms SET status=? WHERE id=?').run('clean', row.roomId);
-    } else if (next === 'cleaning') {
-      db.prepare('UPDATE rooms SET status=? WHERE id=?').run('dirty', row.roomId);
-    }
-  })();
-  res.json({
-    task: db.prepare('SELECT * FROM housekeepingTasks WHERE id = ?').get(req.params.id),
-    room: db.prepare('SELECT * FROM rooms WHERE id = ?').get(row.roomId),
-  });
+r.post('/:id/advance', async (req, res, next) => {
+  try {
+    const [[existing]] = await pool.query('SELECT * FROM housekeepingTasks WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    const idx = STATUS_FLOW.indexOf(existing.status);
+    if (idx === -1 || idx === STATUS_FLOW.length - 1)
+      return res.status(409).json({ error: `Task in "${existing.status}" cannot be advanced` });
+    const next_status = STATUS_FLOW[idx + 1];
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+    try {
+      await conn.execute('UPDATE housekeepingTasks SET status=? WHERE id=?', [next_status, req.params.id]);
+      if (next_status === 'clean' || next_status === 'inspected') {
+        await conn.execute('UPDATE rooms SET status=? WHERE id=?', ['clean', existing.roomId]);
+      } else if (next_status === 'cleaning') {
+        await conn.execute('UPDATE rooms SET status=? WHERE id=?', ['dirty', existing.roomId]);
+      }
+      await conn.commit();
+    } catch (e) { await conn.rollback(); throw e; } finally { conn.release(); }
+    const [[task]] = await pool.query('SELECT * FROM housekeepingTasks WHERE id = ?', [req.params.id]);
+    const [[room]] = await pool.query('SELECT * FROM rooms WHERE id = ?', [existing.roomId]);
+    res.json({ task, room });
+  } catch (e) { next(e); }
 });
 
-/* PATCH /housekeeping/:id/assign — assign to staff member */
-r.patch('/:id/assign', (req, res) => {
-  const { assignedTo } = req.body;
-  const db  = getDb();
-  const row = db.prepare('SELECT id FROM housekeepingTasks WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
-  db.prepare('UPDATE housekeepingTasks SET assignedTo=? WHERE id=?').run(assignedTo ?? null, req.params.id);
-  res.json(db.prepare('SELECT * FROM housekeepingTasks WHERE id = ?').get(req.params.id));
+r.patch('/:id/assign', async (req, res, next) => {
+  try {
+    const { assignedTo } = req.body;
+    const [[row]] = await pool.query('SELECT id FROM housekeepingTasks WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    await pool.execute('UPDATE housekeepingTasks SET assignedTo=? WHERE id=?', [assignedTo ?? null, req.params.id]);
+    const [[updated]] = await pool.query('SELECT * FROM housekeepingTasks WHERE id = ?', [req.params.id]);
+    res.json(updated);
+  } catch (e) { next(e); }
 });
 
-r.delete('/:id', (req, res) => {
-  const info = getDb().prepare('DELETE FROM housekeepingTasks WHERE id = ?').run(req.params.id);
-  if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
-  res.json({ deleted: req.params.id });
+r.delete('/:id', async (req, res, next) => {
+  try {
+    const [result] = await pool.execute('DELETE FROM housekeepingTasks WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ deleted: req.params.id });
+  } catch (e) { next(e); }
 });
 
 module.exports = r;
