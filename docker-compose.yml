@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  db:
+    image: mariadb:11
+    container_name: kavpms_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: kavpms
+      MYSQL_USER: kavpms
+      MYSQL_PASSWORD: Kav@PMS#2026!
+    ports:
+      - "3306:3306"
+    volumes:
+      - kavpms_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: kavpms_app
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_USER: kavpms
+      DB_PASSWORD: Kav@PMS#2026!
+      DB_NAME: kavpms
+      PORT: 3000
+      JWT_SECRET: your-secret-key-change-in-production
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./project:/app/project
+      - ./routes:/app/routes
+      - ./middleware:/app/middleware
+
+volumes:
+  kavpms_data:
