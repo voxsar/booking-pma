@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"D:\\\\Projects\\\\ttl\")",
+      "Bash(npm install *)"
+    ]
+  }
+}
